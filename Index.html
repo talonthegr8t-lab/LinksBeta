@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Links QR & Credit Manager</title>
+    <!-- QR Code Generation & Scanning Libraries -->
+    <script src="https://cloudflare.com"></script>
+    <script src="https://unpkg.com" type="text/javascript"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --text: #1f2937;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--text); }
+        header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; font-size: 1.5rem; }
+        nav { display: flex; gap: 0.5rem; background: #e5e7eb; padding: 0.5rem 2rem; flex-wrap: wrap; }
+        nav button { background: transparent; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-weight: 600; color: #4b5563; }
+        nav button.active { background: var(--card); color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .container { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .card { background: var(--card); padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .btn { background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-weight: 500; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+        .btn-outline { background: transparent; border: 1px solid #d1d5db; color: var(--text); }
+        input, select { padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; width: 100%; margin-bottom: 1rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+        .person-card { border: 1px solid #e5e7eb; padding: 1rem; border-radius: 0.5rem; display: flex; flex-direction: column; justify-content: space-between; }
+        .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 50; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; max-width: 450px; width: 90%; max-height: 90vh; overflow-y: auto; }
+        #qr-display { display: flex; justify-content: center; margin: 1.5rem 0; }
+        #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 0.5rem; overflow: hidden; }
+        .log-item { border-bottom: 1px solid #e5e7eb; padding: 0.5rem 0; font-size: 0.875rem; display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🔗 Links QR System</h1>
+    <button class="btn btn-outline" style="color:white; border-color:white;" onclick="playBeep()">🔊 Test Beep</button>
+</header>
+
+<nav>
+    <button class="active" onclick="switchTab('scanner', this)">📷 Scan QR</button>
+    <button onclick="switchTab('people', this)">👥 People & Links</button>
+    <button onclick="switchTab('shops', this)">🏪 Shops</button>
+    <button onclick="switchTab('bathroom', this)">🚻 Bathroom Pass</button>
+    <button onclick="switchTab('logs', this)">📜 Activity Log</button>
+</nav>
+
+<div class="container">
+
+    <!-- SCANNER TAB -->
+    <div id="scanner" class="tab-content active">
+        <div class="card" style="text-align: center;">
+            <h2>Scan a Person's QR Code</h2>
+            <p>Point your camera at a Links QR code, or simulate a scan below.</p>
+            <div id="reader"></div>
+            <div style="margin-top: 1rem;">
+                <button class="btn" onclick="startScanner()">Start Camera</button>
+                <button class="btn btn-outline" onclick="stopScanner()">Stop Camera</button>
+            </div>
+            <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid #e5e7eb;">
+            <div style="max-width: 300px; margin: 0 auto;">
+                <label><strong>Simulate Scan (No Camera):</strong></label>
+                <select id="sim-person-select"></select>
+                <button class="btn btn-success" style="width:100%" onclick="simulateScan()">Simulate Scan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PEOPLE TAB -->
+    <div id="people" class="tab-content">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="margin:0;">People & Links Accounts</h2>
+                <button class="btn" onclick="openCreatePersonModal()">+ Create Person</button>
+            </div>
+            <div id="people-grid" class="grid"></div>
+        </div>
+    </div>
+
+    <!-- SHOPS TAB -->
+    <div id="shops" class="tab-content">
+        <div class="card">
+            <h2>Create a Shop / Storefront</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <label>Shop Name</label>
+                    <input type="text" id="shop-name" placeholder="e.g., Snack Bar">
+                </div>
+                <div>
+                    <label>Item / Purchase Name</label>
+                    <input type="text" id="shop-item" placeholder="e.g., Chips & Soda">
+                </div>
+            </div>
+            <label>Cost in Links (Credits)</label>
+            <input type="number" id="shop-cost" placeholder="5" min="1">
+            <button class="btn" onclick="createShop()">Add Shop Item</button>
+        </div>
+
+        <div class="card">
+            <h2>Active Shops & Items</h2>
+            <div id="shops-grid" class="grid"></div>
+        </div>
+    </div>
+
+    <!-- BATHROOM TAB -->
+    <div id="bathroom" class="tab-content">
+        <div class="card">
+            <h2>🚻 Active Bathroom Passes</h2>
+            <p>Scan a person's QR code to issue or return a bathroom pass.</p>
+            <div id="bathroom-list" class="grid"></div>
+        </div>
+    </div>
+
+    <!-- LOGS TAB -->
+    <div id="logs" class="tab-content">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Transaction & Pass History</h2>
+                <button class="btn btn-danger" onclick="clearLogs()">Clear History</button>
+            </div>
+            <div id="logs-list"></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- CREATE PERSON MODAL -->
+<div id="create-person-modal" class="modal">
+    <div class="modal-content">
+        <h3>Create New Person</h3>
+        <label>Full Name</label>
+        <input type="text" id="new-person-name" placeholder="Enter name...">
+        <label>Starting Links (Credits)</label>
+        <input type="number" id="new-person-credits" value="10">
+        <div style="display:flex; gap:0.5rem; justify-content: flex-end;">
+            <button class="btn btn-outline" onclick="closeModals()">Cancel</button>
+            <button class="btn" onclick="createPerson()">Create Account</button>
+        </div>
+    </div>
+</div>
+
+<!-- QR CODE SHARE MODAL -->
+<div id="qr-modal" class="modal">
+    <div class="modal-content" style="text-align: center;">
+        <h3 id="qr-modal-name">Person's QR Code</h3>
+        <p style="font-size: 0.875rem; color: #6b7280;">Send or print this QR code for them to scan.</p>
+        <div id="qr-display"></div>
+        <div style="display:flex; gap:0.5rem; justify-content: center;">
+            <button class="btn" onclick="downloadQR()">⬇️ Download PNG</button>
+            <button class="btn btn-outline" onclick="closeModals()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- SCAN ACTION MODAL (What happens after scanning) -->
+<div id="action-modal" class="modal">
+    <div class="modal-content">
+        <h3 id="action-person-name" style="margin-top:0;">Scanned Person</h3>
+        <p>Current Balance: <strong id="action-person-credits" style="font-size:1.25rem; color:var(--primary);">0</strong> Links</p>
+        <p>Bathroom Status: <span id="action-bathroom-status"></span></p>
+        
+        <hr style="border:0; border-top:1px solid #e5e7eb; margin: 1rem 0;">
+        
+        <h4>1. Add or Remove Credits</h4>
+        <div style="display:flex; gap:0.5rem;">
+            <input type="number" id="credit-amount" placeholder="Amount" value="5" style="width: 30%;">
+            <input type="text" id="credit-reason" placeholder="Reason (e.g. Good work, Late)" style="width: 70%;">
+        </div>
+        <div style="display:flex; gap:0.5rem; margin-bottom: 1rem;">
+            <button class="btn btn-success" style="flex:1;" onclick="adjustCredits(1)">+ Add Links</button>
+            <button class="btn btn-danger" style="flex:1;" onclick="adjustCredits(-1)">- Remove Links</button>
+        </div>
+
+        <h4>2. Shop Purchase</h4>
+        <div style="display:flex; gap:0.5rem; margin-bottom: 1rem;">
+            <select id="action-shop-select" style="margin-bottom:0;"></select>
+            <button class="btn" onclick="processShopPurchase()">Buy</button>
+        </div>
+
+        <h4>3. Bathroom Pass</h4>
+        <button id="toggle-bathroom-btn" class="btn btn-outline" style="width:100%; margin-bottom: 1rem;" onclick="toggleBathroomPass()">Toggle Bathroom Pass</button>
+
+        <button class="btn btn-outline" style="width:100%;" onclick="closeModals()">Done / Close</button>
+    </div>
+</div>
+
+<script>
+    // --- STATE MANAGEMENT ---
+    let state = JSON.parse(localStorage.getItem('linksQrState')) || {
+        people: [
+            { id: 'LNK-1001', name: 'Alex Rivera', credits: 25, inBathroom: false, bathroomOutTime: null },
+            { id: 'LNK-1002', name: 'Sam Taylor', credits: 10, inBathroom: false, bathroomOutTime: null }
+        ],
+        shops: [
+            { id: 'SHP-1', shopName: 'Main Store', itemName: 'Pencil / Eraser', cost: 2 },
+            { id: 'SHP-2', shopName: 'Snack Cart', itemName: 'Fruit Snack', cost: 5 }
+        ],
+        logs: []
+    };
+
+    let currentScannedId = null;
+    let html5QrcodeScanner = null;
+
+    function saveState() {
+        localStorage.setItem('linksQrState', JSON.stringify(state));
+        renderAll();
+    }
+
+    // --- AUDIO BEEP (Web Audio API) ---
+    function playBeep() {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // High A5 beep
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.15);
+    }
+
+    // --- NAVIGATION ---
+    function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    function closeModals() {
+        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    }
+
+    // --- PEOPLE MANAGEMENT ---
+    function openCreatePersonModal() {
+        document.getElementById('new-person-name').value = '';
+        document.getElementById('create-person-modal').classList.add('active');
+    }
+
+    function createPerson() {
+        const name = document.getElementById('new-person-name').value.trim();
+        const credits = parseInt(document.getElementById('new-person-credits').value) || 0;
+        if (!name) return alert('Please enter a name.');
+
+        const id = 'LNK-' + Math.floor(1000 + Math.random() * 9000);
+        state.people.push({ id, name, credits, inBathroom: false, bathroomOutTime: null });
+        addLog(`Created Links account for ${name} (${credits} Links)`);
+        saveState();
+        closeModals();
+    }
+
+    function deletePerson(id) {
+        if (!confirm('Delete this person?')) return;
+        state.people = state.people.filter(p => p.id !== id);
+        saveState();
+    }
+
+    // --- QR GENERATION ---
+    function showQR(id) {
+        const person = state.people.find(p => p.id === id);
+        if (!person) return;
+
+        document.getElementById('qr-modal-name').innerText = `${person.name} (${person.id})`;
+        const qrContainer = document.getElementById('qr-display');
+        qrContainer.innerHTML = '';
+
+        new QRCode(qrContainer, {
+            text: person.id,
+            width: 200,
+            height: 200
+        });
+
+        document.getElementById('qr-modal').classList.add('active');
+    }
+
+    function downloadQR() {
+        const img = document.querySelector('#qr-display img');
+        if (!img) return;
+        const link = document.createElement('a');
+        link.href = img.src;
+        link.download = document.getElementById('qr-modal-name').innerText + '.png';
+        link.click();
+    }
+
+    // --- QR SCANNER ---
+    function startScanner() {
+        if (html5QrcodeScanner) return;
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        html5QrcodeScanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decodedText) => {
+                handleScanSuccess(decodedText);
+            },
+            (errorMessage) => { /* ignore frame scan errors */ }
+        ).catch(err => alert("Camera error: " + err));
+    }
+
+    function stopScanner() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => {
+                html5QrcodeScanner = null;
+            });
+        }
+    }
+
+    function simulateScan() {
+        const id = document.getElementById('sim-person-select').value;
+        if (id) handleScanSuccess(id);
+    }
+
+    let scanCooldown = false;
+    function handleScanSuccess(code) {
+        if (scanCooldown) return;
+        const person = state.people.find(p => p.id === code);
+        if (!person) {
+            alert("Unknown QR Code: " + code);
+            return;
+        }
+
+        scanCooldown = true;
+        setTimeout(() => scanCooldown = false, 2000);
+
+        playBeep(); // Beep on scan!
+        openActionModal(person.id);
+    }
+
+    // --- SCAN ACTIONS ---
+    function openActionModal(id) {
+        currentScannedId = id;
+        const person = state.people.find(p => p.id === id);
+        if (!person) return;
+
+        document.getElementById('action-person-name').innerText = person.name;
+        document.getElementById('action-person-credits').innerText = person.credits;
+        
+        const statusEl = document.getElementById('action-bathroom-status');
+        const bathBtn = document.getElementById('toggle-bathroom-btn');
+        
+        if (person.inBathroom) {
+            statusEl.innerHTML = `<span class="badge badge-red">OUT IN BATHROOM</span>`;
+            bathBtn.innerText = "✅ Check Back In From Bathroom";
+        } else {
+            statusEl.innerHTML = `<span class="badge badge-green">IN ROOM</span>`;
+            bathBtn.innerText = "🚻 Issue Bathroom Pass";
+        }
+
+        // Populate shops dropdown
+        const shopSelect = document.getElementById('action-shop-select');
+        shopSelect.innerHTML = state.shops.map(s => 
+            `<option value="${s.id}">${s.shopName}: ${s.itemName} (${s.cost} Links)</option>`
+        ).join('');
+
+        document.getElementById('action-modal').classList.add('active');
+    }
+
+    function adjustCredits(multiplier) {
+        const person = state.people.find(p => p.id === currentScannedId);
+        const amount = parseInt(document.getElementById('credit-amount').value) || 0;
+        const reason = document.getElementById('credit-reason').value.trim() || 'No reason given';
+        
+        if (amount <= 0) return alert("Enter a valid amount.");
+
+        const change = amount * multiplier;
+        person.credits += change;
+        
+        const actionWord = change > 0 ? `Added +${change}` : `Removed ${change}`;
+        addLog(`${person.name}: ${actionWord} Links (${reason})`);
+        
+        document.getElementById('credit-reason').value = '';
+        saveState();
+        openActionModal(person.id);
+    }
+
+    function processShopPurchase() {
+        const person = state.people.find(p => p.id === currentScannedId);
+        const shopId = document.getElementById('action-shop-select').value;
+        const shop = state.shops.find(s => s.id === shopId);
+
+        if (!shop) return;
+        if (person.credits < shop.cost) {
+            return alert(`Not enough Links! ${person.name} has ${person.credits}, needs ${shop.cost}.`);
+        }
+
+        person.credits -= shop.cost;
+        addLog(`🛒 ${person.name} bought "${shop.itemName}" at ${shop.shopName} (-${shop.cost} Links)`);
+        saveState();
+        openActionModal(person.id);
+    }
+
+    function toggleBathroomPass() {
+        const person = state.people.find(p => p.id === currentScannedId);
+        person.inBathroom = !person.inBathroom;
+
+        if (person.inBathroom) {
+            person.bathroomOutTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            addLog(`🚻 ${person.name} left for the bathroom at ${person.bathroomOutTime}`);
+        } else {
+            addLog(`✅ ${person.name} returned from the bathroom`);
+            person.bathroomOutTime = null;
+        }
+
+        saveState();
+        openActionModal(person.id);
+    }
+
+    // --- SHOPS ---
+    function createShop() {
+        const shopName = document.getElementById('shop-name').value.trim();
+        const itemName = document.getElementById('shop-item').value.trim();
+        const cost = parseInt(document.getElementById('shop-cost').value);
+
+        if (!shopName || !itemName || isNaN(cost) || cost < 0) {
+            return alert("Please fill out all shop fields.");
+        }
+
+        state.shops.push({ id: 'SHP-' + Date.now(), shopName, itemName, cost });
+        document.getElementById('shop-name').value = '';
+        document.getElementById('shop-item').value = '';
+        document.getElementById('shop-cost').value = '';
+        saveState();
+    }
+
+    function deleteShop(id) {
+        state.shops = state.shops.filter(s => s.id !== id);
+        saveState();
+    }
+
+    // --- LOGS ---
+    function addLog(message) {
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        state.logs.unshift({ time, message });
+    }
+
+    function clearLogs() {
+        state.logs = [];
+        saveState();
+    }
+
+    // --- RENDER UI ---
+    function renderAll() {
+        // Render People
+        const peopleGrid = document.getElementById('people-grid');
+        peopleGrid.innerHTML = state.people.map(p => `
+            <div class="person-card">
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="margin:0;">${p.name}</h3>
+                        <span class="badge ${p.inBathroom ? 'badge-red' : 'badge-green'}">
+                            ${p.inBathroom ? 'Bathroom' : 'Active'}
+                        </span>
+                    </div>
+                    <p style="color:#6b7280; font-size:0.85rem; margin:0.25rem 0;">ID: ${p.id}</p>
+                    <p style="font-size:1.25rem; font-weight:bold; color:var(--primary); margin:0.5rem 0;">
+                        ${p.credits} Links
+                    </p>
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+                    <button class="btn" style="flex:1;" onclick="showQR('${p.id}')">📱 QR Code</button>
+                    <button class="btn btn-outline" onclick="openActionModal('${p.id}')">⚡ Manage</button>
+                    <button class="btn btn-danger" onclick="deletePerson('${p.id}')">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+
+        // Render Simulator Dropdown
+        document.getElementById('sim-person-select').innerHTML = state.people.map(p => 
+            `<option value="${p.id}">${p.name} (${p.id})</option>`
+        ).join('');
+
+        // Render Shops
+        document.getElementById('shops-grid').innerHTML = state.shops.map(s => `
+            <div class="person-card">
+                <div>
+                    <span class="badge badge-green">${s.shopName}</span>
+                    <h3 style="margin:0.5rem 0;">${s.itemName}</h3>
+                    <p style="font-weight:bold; color:var(--primary);">${s.cost} Links</p>
+                </div>
+                <button class="btn btn-danger" style="margin-top:0.5rem;" onclick="deleteShop('${s.id}')">Remove Item</button>
+            </div>
+        `).join('');
+
+        // Render Bathroom Passes
+        const outPeople = state.people.filter(p => p.inBathroom);
+        const bathList = document.getElementById('bathroom-list');
+        if (outPeople.length === 0) {
+            bathList.innerHTML = `<p style="color:#6b7280;">Nobody is currently out on a bathroom pass.</p>`;
+        } else {
+            bathList.innerHTML = outPeople.map(p => `
+                <div class="person-card" style="border-color: var(--danger);">
+                    <h3>${p.name}</h3>
+                    <p>Left at: <strong>${p.bathroomOutTime}</strong></p>
+                    <button class="btn btn-success" onclick="currentScannedId='${p.id}'; toggleBathroomPass();">Mark Returned</button>
+                </div>
+            `).join('');
+        }
+
+        // Render Logs
+        document.getElementById('logs-list').innerHTML = state.logs.map(l => `
+            <div class="log-item">
+                <span>${l.message}</span>
+                <span style="color:#6b7280;">${l.time}</span>
+            </div>
+        `).join('') || '<p style="color:#6b7280;">No activity recorded yet.</p>';
+    }
+
+    // Initial Render
+    renderAll();
+</script>
+</body>
+</html>
